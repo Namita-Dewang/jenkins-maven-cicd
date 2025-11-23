@@ -2,13 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // Your Docker Hub repo (update if your repo name is different)
-        DOCKER_HUB_REPO = "namit77/jenkins-maven-cicd"
-
-        // Your EC2 username and public IP
-        AWS_HOST = "ubuntu@3.110.105.247"
-
-        // Jenkins credential IDs EXACTLY as you have them
         AWS_KEY = credentials('aws-ec2-key')
     }
 
@@ -16,16 +9,15 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git(
-                    url: 'https://github.com/Namita-Dewang/jenkins-maven-cicd.git',
-                    credentialsId: 'github-creds'
-                )
+                git branch: 'main',
+                    credentialsId: 'github-creds',
+                    url: 'https://github.com/Namita-Dewang/jenkins-maven-cicd.git'
             }
         }
 
         stage('Build Maven Project') {
             steps {
-                sh 'mvn -B clean package'
+                sh 'mvn clean package'
             }
         }
 
@@ -37,49 +29,41 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    sh "docker build -t ${DOCKER_HUB_REPO}:latest ."
-                }
+                sh 'docker build -t namit77/jenkins-maven-cicd:latest .'
             }
         }
 
         stage('Push Docker Image to Docker Hub') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
-                    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                    sh "docker push ${DOCKER_HUB_REPO}:latest"
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', 
+                                                 usernameVariable: 'USER', 
+                                                 passwordVariable: 'PASS')]) {
+                    sh 'docker login -u $USER -p $PASS'
+                    sh 'docker push namit77/jenkins-maven-cicd:latest'
                 }
             }
         }
 
         stage('Deploy on AWS EC2') {
             steps {
-                script {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no -i ${AWS_KEY} ${AWS_HOST} '
-                        sudo docker pull ${DOCKER_HUB_REPO}:latest &&
-                        sudo docker stop myapp || true &&
-                        sudo docker rm myapp || true &&
-                        sudo docker run -d --name myapp -p 80:80 ${DOCKER_HUB_REPO}:latest
-                    '
-                    """
-                }
+                sh """
+                ssh -o StrictHostKeyChecking=no -i \$AWS_KEY ubuntu@3.110.105.247 '
+                    docker pull namit77/jenkins-maven-cicd:latest &&
+                    docker stop cicd_app || true &&
+                    docker rm cicd_app || true &&
+                    docker run -d --name cicd_app -p 8080:8080 namit77/jenkins-maven-cicd:latest
+                '
+                """
             }
         }
     }
 
     post {
-        success {
-            echo "🎉 Deployment Successful on AWS EC2!"
-        }
         failure {
             echo "❌ Pipeline Failed — check console output."
+        }
+        success {
+            echo "✅ Deployment Completed Successfully!"
         }
     }
 }
