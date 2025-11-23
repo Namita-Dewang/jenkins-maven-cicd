@@ -2,9 +2,14 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_REPO = "namit77/jenkins-maven-app"    // change to your Docker Hub repo
-        AWS_HOST = "ubuntu@3.110.105.247"               // your EC2 username + public IP
-        AWS_KEY = credentials('aws-ec2-key')            // Jenkins credential ID for your PEM
+        // Your Docker Hub repo (update if your repo name is different)
+        DOCKER_HUB_REPO = "namit77/jenkins-maven-cicd"
+
+        // Your EC2 username and public IP
+        AWS_HOST = "ubuntu@3.110.105.247"
+
+        // Jenkins credential IDs EXACTLY as you have them
+        AWS_KEY = credentials('aws-ec2-key')
     }
 
     stages {
@@ -24,7 +29,7 @@ pipeline {
             }
         }
 
-        stage('Test') {
+        stage('Run Tests') {
             steps {
                 sh 'mvn test'
             }
@@ -38,13 +43,14 @@ pipeline {
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Push Docker Image to Docker Hub') {
             steps {
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'dockerhub-creds',
                         usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS')
+                        passwordVariable: 'DOCKER_PASS'
+                    )
                 ]) {
                     sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
                     sh "docker push ${DOCKER_HUB_REPO}:latest"
@@ -52,7 +58,7 @@ pipeline {
             }
         }
 
-        stage('Deploy to AWS EC2') {
+        stage('Deploy on AWS EC2') {
             steps {
                 script {
                     sh """
@@ -70,10 +76,10 @@ pipeline {
 
     post {
         success {
-            echo "Successfully Deployed to EC2 🚀"
+            echo "🎉 Deployment Successful on AWS EC2!"
         }
         failure {
-            echo "Pipeline Failed ❌"
+            echo "❌ Pipeline Failed — check console output."
         }
     }
 }
